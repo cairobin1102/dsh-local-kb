@@ -33,7 +33,7 @@
     "dsh": ">=0.2.1-rc.3"
   },
   "scripts": {
-    "test": "node test/kb.test.mjs && node test/ui.test.mjs && node test/pdf.test.mjs"
+    "test": "node test/kb.test.mjs && node test/ui.test.mjs && node test/pdf.test.mjs && node test/libraries.test.mjs"
   },
   "license": "MIT"
 }

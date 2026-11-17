@@ -6,6 +6,8 @@ window.__ModuleLoader__.load({
     const { useCallback, useEffect, useMemo, useRef, useState } = React
 
     const API = '/api/local-kb'
+    // Set from apply(ctx): the page needs it for `uiWorkspace.pickDirectory()`.
+    let uiCtx = null
 
     async function request(pathname, body, { timeoutMs = 20000 } = {}) {
       const controller = new AbortController()
@@ -52,6 +54,21 @@ window.__ModuleLoader__.load({
       empty: '无索引',
     }
 
+    function draftFromConfig(config) {
+      return {
+        name: config.name ?? '',
+        root: config.root ?? '',
+        libraries: (config.libraries ?? []).map((library) => ({
+          id: library.id,
+          name: library.name,
+          root: library.root,
+        })),
+        embedding: { ...config.embedding },
+        rerank: { ...config.rerank },
+        ocr: { ...(config.ocr ?? {}) },
+      }
+    }
+
     const CSS = `
 .lkb-root{display:flex;height:100%;min-height:0;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font-size:13px;line-height:1.5}
 .lkb-side{width:272px;flex:none;display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
@@ -59,6 +76,14 @@ window.__ModuleLoader__.load({
 .lkb-title{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
 .lkb-sub{color:var(--dsw-alias-label-secondary);font-size:11.5px;margin-top:3px;word-break:break-all}
 .lkb-side-tools{padding:8px 12px;display:flex;gap:6px;flex-wrap:wrap}
+.lkb-libs{display:flex;flex-wrap:wrap;gap:6px;padding:4px 12px 0}
+.lkb-chip-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lkb-chip-btn:hover{background:var(--dsw-alias-bg-layer-2)}
+.lkb-chip-btn.on{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}
+.lkb-chip-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.lkb-chip-btn.add{border-style:dashed;color:var(--dsw-alias-brand-primary)}
+.lkb-chip-count{font-size:11px;opacity:.75}
+.lkb-tag{margin-left:6px;padding:0 6px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);font-size:0.85em;color:var(--dsw-alias-label-secondary);font-weight:400}
 .lkb-list{flex:1;overflow:auto;padding:4px 6px 14px}
 .lkb-item{padding:6px 8px;border-radius:6px;cursor:pointer;display:flex;gap:8px;align-items:flex-start;border:1px solid transparent;background:transparent;color:inherit;font:inherit;text-align:left;width:100%}
 .lkb-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
@@ -115,7 +140,8 @@ window.__ModuleLoader__.load({
 .lkb-doc-path{font-weight:600;word-break:break-all}
 .lkb-line{color:var(--dsw-alias-label-secondary);user-select:none;display:inline-block;width:3.4em;text-align:right;margin-right:10px}
 .lkb-link{color:var(--dsw-alias-brand-primary);cursor:pointer;background:none;border:0;padding:0;font-size:12px;font-family:inherit;text-decoration:underline}
-.lkb-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-primary);margin:8px 0}.lkb-check input{width:16px;height:16px}.lkb-fieldset{border:0;margin:0;padding:0;min-width:0}
+.lkb-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-primary);margin:8px 0}.lkb-check input{width:16px;height:16px}.lkb-lib-row{display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin:6px 0}.lkb-lib-add{display:grid;grid-template-columns:minmax(110px,1fr) minmax(160px,1.6fr) auto auto;gap:8px;margin-top:10px}
+.lkb-fieldset{border:0;margin:0;padding:0;min-width:0}
 .lkb-notice.info .lkb-link{color:var(--dsw-alias-brand-primary)}
 .lkb-kicker{font-size:11px;color:var(--dsw-alias-label-secondary)}
 .lkb-key{display:flex;gap:6px;align-items:center}
@@ -253,6 +279,8 @@ window.__ModuleLoader__.load({
       const [draft, setDraft] = useState(null)
       const [keys, setKeys] = useState({ embedding: '', rerank: '', ocr: '' })
       const [restarting, setRestarting] = useState(false)
+      const [scope, setScope] = useState('all')
+      const [newLibrary, setNewLibrary] = useState({ name: '', root: '' })
       const pollRef = useRef(0)
       const draftInitRef = useRef(false)
       const searchSeqRef = useRef(0)
@@ -266,13 +294,7 @@ window.__ModuleLoader__.load({
         setState(payload)
         if (!draftInitRef.current) {
           draftInitRef.current = true
-          setDraft({
-            name: payload.config.name,
-            root: payload.config.root,
-            embedding: { ...payload.config.embedding },
-            rerank: { ...payload.config.rerank },
-            ocr: { ...(payload.config.ocr ?? {}) },
-          })
+          setDraft(draftFromConfig(payload.config))
         }
         return payload
       }, [])
@@ -338,17 +360,7 @@ window.__ModuleLoader__.load({
               })
               return
             }
-            setDraft((current) =>
-              current
-                ? {
-                    name: payload.config.name,
-                    root: payload.config.root,
-                    embedding: { ...payload.config.embedding },
-                    rerank: { ...payload.config.rerank },
-                    ocr: { ...(payload.config.ocr ?? {}) },
-                  }
-                : current,
-            )
+            setDraft((current) => (current ? draftFromConfig(payload.config) : current))
             setRestarting(false)
             setBusy('')
             setKeys({ embedding: '', rerank: '', ocr: '' })
@@ -377,12 +389,59 @@ window.__ModuleLoader__.load({
 
       const status = state?.status ?? null
       const config = state?.config ?? null
+      const libraries = draft?.libraries ?? config?.libraries ?? []
+      const scopedLibrary = scope === 'all' ? null : libraries.find((library) => library.id === scope) ?? null
       const files = docs?.files ?? []
       const visibleFiles = useMemo(() => {
         const needle = filter.trim().toLowerCase()
-        const rows = needle === '' ? files : files.filter((file) => file.path.toLowerCase().includes(needle))
-        return rows.slice().sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
-      }, [files, filter])
+        const rows = scope === 'all' ? files : files.filter((file) => file.library?.id === scope)
+        const matched =
+          needle === ''
+            ? rows
+            : rows.filter(
+                (file) =>
+                  file.path.toLowerCase().includes(needle) || (file.library?.name ?? '').toLowerCase().includes(needle),
+              )
+        return matched.slice().sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+      }, [files, filter, scope])
+
+      /** The config object both probes and saves send: shared models + the library list. */
+      const configPayload = useCallback(() => {
+        if (!draft) return null
+        return {
+          libraries: draft.libraries.map((library) => ({
+            id: library.id,
+            name: library.name,
+            root: library.root,
+          })),
+          embedding: {
+            provider: draft.embedding.provider,
+            baseUrl: draft.embedding.baseUrl,
+            model: draft.embedding.model,
+            apiKeyEnv: draft.embedding.apiKeyEnv,
+            batchSize: draft.embedding.batchSize,
+          },
+          rerank: {
+            enabled: Boolean(draft.rerank.enabled),
+            provider: draft.rerank.provider,
+            baseUrl: draft.rerank.baseUrl,
+            model: draft.rerank.model,
+            apiKeyEnv: draft.rerank.apiKeyEnv,
+            topN: draft.rerank.topN,
+            candidates: draft.rerank.candidates,
+          },
+          ocr: {
+            enabled: Boolean(draft.ocr?.enabled),
+            baseUrl: draft.ocr?.baseUrl ?? '',
+            model: draft.ocr?.model ?? '',
+            apiKeyEnv: draft.ocr?.apiKeyEnv ?? '',
+            dpi: draft.ocr?.dpi,
+            maxPages: draft.ocr?.maxPages,
+            concurrency: draft.ocr?.concurrency,
+            mutoolPath: draft.ocr?.mutoolPath ?? '',
+          },
+        }
+      }, [draft])
 
       const runSearch = useCallback(async () => {
         const text = query.trim()
@@ -395,6 +454,7 @@ window.__ModuleLoader__.load({
             query: text,
             limit: config?.topK ?? 8,
             rerank: rerankOn,
+            library: scope === 'all' ? undefined : scope,
           })
           if (seq !== searchSeqRef.current) return
           setResults(payload)
@@ -405,9 +465,9 @@ window.__ModuleLoader__.load({
         } finally {
           if (seq === searchSeqRef.current) setBusy('')
         }
-      }, [query, config, rerankOn])
+      }, [query, config, rerankOn, scope])
 
-      const openDoc = useCallback(async (relativePath, startLine = 1) => {
+      const openDoc = useCallback(async (relativePath, startLine = 1, libraryId) => {
         const seq = (readSeqRef.current += 1)
         setTab('docs')
         setBusy('read')
@@ -418,6 +478,7 @@ window.__ModuleLoader__.load({
             path: relativePath,
             offset: Math.max(1, Number(startLine) - 2),
             limit: 400,
+            library: libraryId,
           })
           if (seq !== readSeqRef.current) return
           setDoc(payload)
@@ -435,7 +496,7 @@ window.__ModuleLoader__.load({
         setBusy('read')
         try {
           const offset = doc.offset + doc.text.split('\n').length
-          const payload = await request('/read', { path: doc.path, offset, limit: 600 })
+          const payload = await request('/read', { path: doc.path, offset, limit: 600, library: doc.library?.id })
           setDoc({ ...payload, offset: doc.offset, text: `${doc.text}\n${payload.text}` })
         } catch (failure) {
           setError(String(failure?.message ?? failure))
@@ -453,46 +514,16 @@ window.__ModuleLoader__.load({
             // Probes test what is typed in the form (unsaved included), so a
             // wrong endpoint is caught before saving and reloading.
             const probing = action === 'probe' || action === 'probe-rerank' || action === 'probe-ocr'
+            const base = { action, library: scope === 'all' ? undefined : scope }
             const payload = await request(
               '/index',
               probing && draft
-                ? {
-                    action,
-                    config: {
-                      root: draft.root,
-                      embedding: {
-                        provider: draft.embedding.provider,
-                        baseUrl: draft.embedding.baseUrl,
-                        model: draft.embedding.model,
-                        apiKeyEnv: draft.embedding.apiKeyEnv,
-                        batchSize: draft.embedding.batchSize,
-                      },
-                      rerank: {
-                        enabled: Boolean(draft.rerank.enabled),
-                        provider: draft.rerank.provider,
-                        baseUrl: draft.rerank.baseUrl,
-                        model: draft.rerank.model,
-                        apiKeyEnv: draft.rerank.apiKeyEnv,
-                        topN: draft.rerank.topN,
-                        candidates: draft.rerank.candidates,
-                      },
-                      ocr: {
-                        enabled: Boolean(draft.ocr?.enabled),
-                        baseUrl: draft.ocr?.baseUrl ?? '',
-                        model: draft.ocr?.model ?? '',
-                        apiKeyEnv: draft.ocr?.apiKeyEnv ?? '',
-                        dpi: draft.ocr?.dpi,
-                        maxPages: draft.ocr?.maxPages,
-                        concurrency: draft.ocr?.concurrency,
-                        mutoolPath: draft.ocr?.mutoolPath ?? '',
-                      },
-                    },
-                    keys: { embedding: keys.embedding, rerank: keys.rerank, ocr: keys.ocr },
-                  }
-                : { action },
-              { timeoutMs: action === 'rebuild' ? 600000 : 180000 },
+                ? { ...base, config: configPayload(), keys: { embedding: keys.embedding, rerank: keys.rerank, ocr: keys.ocr } }
+                : base,
+              { timeoutMs: action === 'rebuild' ? 900000 : 180000 },
             )
             if (action === 'rebuild') {
+              const perLibrary = Array.isArray(payload.libraries) ? payload.libraries : null
               const unsupported = payload.unsupported ?? []
               const skipped = payload.skipped ?? []
               const failures = payload.errors ?? []
@@ -505,7 +536,14 @@ window.__ModuleLoader__.load({
               if (failures.length > 0) {
                 details.push(`解析失败 ${failures.length} 个：${String(failures[0]?.reason ?? failures[0]?.error ?? '').slice(0, 120)}`)
               }
-              const warn = Boolean(payload.embeddingError) || failures.length > 0
+              for (const item of perLibrary ?? []) {
+                details.push(`「${item.name}」${item.fileCount ?? 0} 个文件 / ${item.chunkCount ?? 0} 个片段`)
+                if (item.embeddingError) details.push(`「${item.name}」向量化失败：${item.embeddingError}`)
+              }
+              const warn =
+                Boolean(payload.embeddingError) ||
+                failures.length > 0 ||
+                (perLibrary ?? []).some((item) => item.embeddingError)
               setNotice({
                 kind: warn ? 'err' : 'ok',
                 text: [
@@ -548,7 +586,7 @@ window.__ModuleLoader__.load({
             setBusy('')
           }
         },
-        [draft, keys, refresh],
+        [draft, keys, refresh, scope, configPayload],
       )
 
       const saveSettings = useCallback(async () => {
@@ -562,36 +600,7 @@ window.__ModuleLoader__.load({
           if (keys.rerank !== '') keysPayload.rerank = keys.rerank
           if (keys.ocr !== '') keysPayload.ocr = keys.ocr
           const payload = await request('/settings', {
-            config: {
-              name: draft.name,
-              root: draft.root,
-              embedding: {
-                provider: draft.embedding.provider,
-                baseUrl: draft.embedding.baseUrl,
-                model: draft.embedding.model,
-                apiKeyEnv: draft.embedding.apiKeyEnv,
-                batchSize: draft.embedding.batchSize,
-              },
-              rerank: {
-                enabled: Boolean(draft.rerank.enabled),
-                provider: draft.rerank.provider,
-                baseUrl: draft.rerank.baseUrl,
-                model: draft.rerank.model,
-                apiKeyEnv: draft.rerank.apiKeyEnv,
-                topN: draft.rerank.topN,
-                candidates: draft.rerank.candidates,
-              },
-              ocr: {
-                enabled: Boolean(draft.ocr?.enabled),
-                baseUrl: draft.ocr?.baseUrl ?? '',
-                model: draft.ocr?.model ?? '',
-                apiKeyEnv: draft.ocr?.apiKeyEnv ?? '',
-                dpi: draft.ocr?.dpi,
-                maxPages: draft.ocr?.maxPages,
-                concurrency: draft.ocr?.concurrency,
-                mutoolPath: draft.ocr?.mutoolPath ?? '',
-              },
-            },
+            config: configPayload(),
             keys: keysPayload,
           })
           setKeys({ embedding: '', rerank: '', ocr: '' })
@@ -601,7 +610,76 @@ window.__ModuleLoader__.load({
           setError(String(failure?.message ?? failure))
           setBusy('')
         }
-      }, [draft, keys])
+      }, [draft, keys, configPayload])
+
+      /** Add / rename / remove a folder, then let the reload bring the list back. */
+      const commitLibraries = useCallback(
+        async (nextLibraries) => {
+          if (!draft) return
+          setBusy('save')
+          setError('')
+          setNotice(null)
+          try {
+            const payload = await request('/settings', {
+              config: { ...configPayload(), libraries: nextLibraries },
+            })
+            setNotice({ kind: 'info', text: payload.note ?? '已提交，插件正在重启。' })
+            setRestarting(true)
+          } catch (failure) {
+            setError(String(failure?.message ?? failure))
+            setBusy('')
+          }
+        },
+        [draft, configPayload],
+      )
+
+      const addLibrary = useCallback(async () => {
+        const root = newLibrary.root.trim()
+        if (root === '') {
+          setError('请填写文件夹的绝对路径。')
+          return
+        }
+        const name = newLibrary.name.trim() || root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || root
+        const next = [...(draft?.libraries ?? []), { name, root }]
+        setNewLibrary({ name: '', root: '' })
+        await commitLibraries(next)
+      }, [newLibrary, draft, commitLibraries])
+
+      const removeLibrary = useCallback(
+        async (library) => {
+          const confirmed =
+            typeof window === 'undefined' || typeof window.confirm !== 'function'
+              ? true
+              : window.confirm(`从列表里移除「${library.name}」？\n\n只会取消挂载，不会删除磁盘上的文件和 .dsh-kb 索引。`)
+          if (!confirmed) return
+          const next = (draft?.libraries ?? []).filter((item) => item.root !== library.root)
+          if (next.length === 0) {
+            setError('至少要保留一个知识库文件夹。')
+            return
+          }
+          await commitLibraries(next)
+        },
+        [draft, commitLibraries],
+      )
+
+      const pickFolder = useCallback(async () => {
+        const workspace = uiCtx?.get?.('uiWorkspace')
+        if (!workspace || typeof workspace.pickDirectory !== 'function') {
+          setError('当前宿主没有目录选择器：直接输入文件夹的绝对路径即可。')
+          return
+        }
+        try {
+          const picked = await workspace.pickDirectory()
+          if (typeof picked === 'string' && picked !== '') {
+            setNewLibrary((current) => ({
+              name: current.name || picked.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '',
+              root: picked,
+            }))
+          }
+        } catch (failure) {
+          setError(String(failure?.message ?? failure))
+        }
+      }, [])
 
       const clearKey = useCallback(
         async (slot) => {
@@ -660,8 +738,20 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'lkb-head-main' },
-          h('div', { className: 'lkb-head-title' }, config?.name || '本地知识库'),
-          h('div', { className: 'lkb-head-path' }, config?.root || '未设置知识库目录'),
+          h(
+            'div',
+            { className: 'lkb-head-title' },
+            scopedLibrary ? scopedLibrary.name : libraries.length > 1 ? '本地知识库' : config?.name || '本地知识库',
+          ),
+          h(
+            'div',
+            { className: 'lkb-head-path' },
+            scopedLibrary
+              ? scopedLibrary.root
+              : libraries.length > 1
+                ? `全部 ${libraries.length} 个库：${libraries.map((library) => library.name).join(' · ')}`
+                : config?.root || '未设置知识库目录',
+          ),
           h('div', { className: 'lkb-chips' }, statusChips),
         ),
         h(
@@ -671,11 +761,11 @@ window.__ModuleLoader__.load({
             'button',
             {
               className: 'lkb-btn',
-              disabled: !config?.root || Boolean(busy),
-              title: '按目录当前内容重建索引',
+              disabled: libraries.length === 0 || Boolean(busy),
+              title: scope === 'all' ? '重建所有库的索引' : `只重建「${scopedLibrary?.name ?? ''}」的索引`,
               onClick: () => runIndex('rebuild'),
             },
-            busy === 'rebuild' ? '重建中…' : '重建索引',
+            busy === 'rebuild' ? '重建中…' : scope === 'all' && libraries.length > 1 ? '重建全部库' : '重建索引',
           ),
           h(
             'button',
@@ -685,6 +775,20 @@ window.__ModuleLoader__.load({
         ),
       )
 
+      const scopeChip = (id, label, count) =>
+        h(
+          'button',
+          {
+            key: id,
+            type: 'button',
+            className: `lkb-chip-btn${scope === id ? ' on' : ''}`,
+            title: label,
+            onClick: () => setScope(id),
+          },
+          label,
+          count === undefined ? null : h('span', { className: 'lkb-chip-count' }, String(count)),
+        )
+
       const sidebar = h(
         'div',
         { className: 'lkb-side' },
@@ -692,7 +796,27 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'lkb-side-head' },
           h('div', { className: 'lkb-title' }, '知识库'),
-          h('div', { className: 'lkb-sub' }, docs?.root || config?.root || '未设置目录'),
+          h(
+            'div',
+            { className: 'lkb-sub' },
+            libraries.length > 1
+              ? `${libraries.length} 个库，默认一起检索`
+              : scopedLibrary?.root || docs?.root || config?.root || '未设置目录',
+          ),
+        ),
+        h(
+          'div',
+          { className: 'lkb-libs' },
+          scopeChip('all', '全部库'),
+          ...libraries.map((library) => {
+            const count = files.filter((file) => file.library?.id === library.id).length
+            return scopeChip(library.id, library.name, files.length > 0 ? count : undefined)
+          }),
+          h(
+            'button',
+            { type: 'button', className: 'lkb-chip-btn add', title: '添加本地文件夹', onClick: () => setTab('settings') },
+            '＋ 添加库',
+          ),
         ),
         h(
           'div',
@@ -700,7 +824,7 @@ window.__ModuleLoader__.load({
           h('input', {
             className: 'lkb-input',
             style: { flex: '1 1 100%' },
-            placeholder: '筛选文档…',
+            placeholder: scope === 'all' ? '筛选文档…' : `在「${scopedLibrary?.name ?? ''}」里筛选…`,
             value: filter,
             onChange: (event) => setFilter(event.target.value),
           }),
@@ -716,19 +840,19 @@ window.__ModuleLoader__.load({
                   ? `读取目录失败：${docsError}`
                   : docs === null
                     ? '加载中…'
-                    : state?.configured === false
-                      ? '还没有指定知识库目录'
+                    : libraries.length === 0
+                      ? '还没有添加知识库文件夹：点上面的「＋ 添加库」'
                       : '没有文档',
               )
             : visibleFiles.map((file) =>
                 h(
                   'button',
                   {
-                    key: file.path,
+                    key: `${file.library?.id ?? ''}:${file.path}`,
                     type: 'button',
                     className: `lkb-item${doc?.path === file.path ? ' active' : ''}`,
-                    title: file.path,
-                    onClick: () => openDoc(file.path),
+                    title: file.library ? `${file.library.name} · ${file.path}` : file.path,
+                    onClick: () => openDoc(file.path, 1, file.library?.id),
                   },
                   h(
                     'span',
@@ -737,7 +861,8 @@ window.__ModuleLoader__.load({
                     h(
                       'span',
                       { style: { display: 'block', fontSize: '11px', color: 'var(--dsw-alias-label-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-                      dirName(file.path) || fmtSize(file.size),
+                      [libraries.length > 1 ? file.library?.name : '', dirName(file.path)].filter(Boolean).join(' · ') ||
+                        fmtSize(file.size),
                     ),
                   ),
                   h('span', { className: 'lkb-item-meta' }, String(file.chunks)),
@@ -788,8 +913,8 @@ window.__ModuleLoader__.load({
           ? h(
               'div',
               { className: 'lkb-notice info' },
-              '还没有指定知识库文件夹。',
-              h('button', { className: 'lkb-link', type: 'button', onClick: () => setTab('settings') }, '去「设置」填绝对路径'),
+              '还没有添加知识库文件夹。',
+              h('button', { className: 'lkb-link', type: 'button', onClick: () => setTab('settings') }, '去「设置」添加一个本地文件夹'),
               ' → 保存 → 回到这里点「重建索引」。',
             )
           : null,
@@ -819,9 +944,16 @@ window.__ModuleLoader__.load({
                         { className: 'lkb-card-head' },
                         h(
                           'button',
-                          { type: 'button', className: 'lkb-card-path', onClick: () => openDoc(item.path, item.startLine) },
+                          {
+                            type: 'button',
+                            className: 'lkb-card-path',
+                            onClick: () => openDoc(item.path, item.startLine, item.library?.id),
+                          },
                           `${index + 1}. ${baseName(item.path)}`,
                           h('span', { style: { fontWeight: 400, color: 'var(--dsw-alias-label-secondary)' } }, `  ·  ${item.path} #L${item.startLine}`),
+                          item.library && libraries.length > 1
+                            ? h('span', { className: 'lkb-tag' }, item.library.name)
+                            : null,
                         ),
                         h(
                           'div',
@@ -855,7 +987,11 @@ window.__ModuleLoader__.load({
                   'div',
                   null,
                   h('div', { className: 'lkb-doc-path' }, doc.path),
-                  h('div', { className: 'lkb-kicker' }, `共 ${doc.totalLines} 行 · 已显示 ${doc.offset}–${doc.offset + doc.text.split('\n').length - 1} 行`),
+                  h(
+                    'div',
+                    { className: 'lkb-kicker' },
+                    `${doc.library ? `「${doc.library.name}」 · ` : ''}共 ${doc.totalLines} 行 · 已显示 ${doc.offset}–${doc.offset + doc.text.split('\n').length - 1} 行`,
+                  ),
                 ),
                 h(
                   'div',
@@ -891,18 +1027,64 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'lkb-section' },
-              h('div', { className: 'lkb-section-title' }, '知识库'),
+              h('div', { className: 'lkb-section-title' }, `知识库文件夹（${libraries.length}）`),
               h(
                 'div',
-                { className: 'lkb-grid' },
-                h(Field, { label: '名称', hint: '显示在侧边栏与标题上' },
-                  h('input', { className: 'lkb-input', value: draft.name, onChange: (event) => updateDraft('name', event.target.value) }),
+                { className: 'lkb-kicker', style: { marginBottom: '6px' } },
+                '每个文件夹各自索引到 <目录>\\.dsh-kb，向量互不影响；检索默认跨所有库，结果里会标出库名。',
+              ),
+              libraries.length === 0
+                ? h('div', { className: 'lkb-empty' }, '还没有添加任何文件夹。')
+                : libraries.map((library, index) =>
+                    h(
+                      'div',
+                      { className: 'lkb-lib-row', key: library.id ?? `${index}` },
+                      h('input', { className: 'lkb-input', value: library.name, readOnly: true, title: '库名' }),
+                      h('input', { className: 'lkb-input', value: library.root, readOnly: true, title: '目录' }),
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          className: 'lkb-btn ghost',
+                          disabled: Boolean(busy) || restarting,
+                          onClick: () => removeLibrary(library),
+                        },
+                        '移除',
+                      ),
+                    ),
+                  ),
+              h(
+                'div',
+                { className: 'lkb-lib-add' },
+                h('input', {
+                  className: 'lkb-input',
+                  placeholder: '新库名称（可留空）',
+                  value: newLibrary.name,
+                  onChange: (event) => setNewLibrary({ ...newLibrary, name: event.target.value }),
+                }),
+                h('input', {
+                  className: 'lkb-input',
+                  placeholder: '文件夹绝对路径，例如 D:\\notes',
+                  value: newLibrary.root,
+                  onChange: (event) => setNewLibrary({ ...newLibrary, root: event.target.value }),
+                }),
+                h(
+                  'button',
+                  { type: 'button', className: 'lkb-btn ghost', disabled: Boolean(busy) || restarting, onClick: pickFolder },
+                  '选择文件夹…',
                 ),
-                h(Field, { label: '目录（绝对路径）', hint: '索引根目录，改完保存会按新目录重建' },
-                  h('input', { className: 'lkb-input', value: draft.root, onChange: (event) => updateDraft('root', event.target.value) }),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'lkb-btn',
+                    disabled: Boolean(busy) || restarting || newLibrary.root.trim() === '',
+                    onClick: addLibrary,
+                  },
+                  busy === 'save' ? '提交中…' : '添加',
                 ),
               ),
-              h('div', { className: 'lkb-kicker' }, `索引文件位置：${config?.indexDir || '（目录下 .dsh-kb）'} · 片段 ${config?.chunkSize ?? 0}/${config?.chunkOverlap ?? 0} 字符 · 扩展名 ${(config?.extensions ?? []).join(' ')}`),
+              h('div', { className: 'lkb-kicker' }, `片段 ${config?.chunkSize ?? 0}/${config?.chunkOverlap ?? 0} 字符 · 扩展名 ${(config?.extensions ?? []).join(' ')}`),
             ),
             h(
               'div',
@@ -1178,6 +1360,7 @@ window.__ModuleLoader__.load({
       inject: ['slots'],
       apply(ctx) {
         injectStyle()
+        uiCtx = ctx
         ctx.slots.inject('sidebar.panellist', () =>
           ctx.slots.register(
             {
