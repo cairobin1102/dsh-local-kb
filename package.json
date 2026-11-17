@@ -1,9 +1,9 @@
 {
   "name": "dsh-local-kb",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "外挂本地文件夹知识库：向量检索 + 关键词兜底 + 重排，侧边栏界面可配置",
+  "description": "外挂本地文件夹知识库：向量检索 + 关键词兜底 + 重排 + PDF/OCR，侧边栏界面可配置，自带素材包生成器",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
@@ -33,7 +33,7 @@
     "dsh": ">=0.2.1-rc.3"
   },
   "scripts": {
-    "test": "node test/kb.test.mjs && node test/ui.test.mjs && node test/pdf.test.mjs && node test/libraries.test.mjs"
+    "test": "node test/kb.test.mjs && node test/ui.test.mjs && node test/pdf.test.mjs && node test/libraries.test.mjs && node test/packet.test.mjs"
   },
   "license": "MIT"
 }

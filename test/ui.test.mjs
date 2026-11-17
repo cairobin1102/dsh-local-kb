@@ -259,6 +259,51 @@ await test('api：state / docs / search / read / 未知路由', async () => {
   })
 })
 
+await test('api：/packet 归集四类卡片，空主题与空提纲报 400', async () => {
+  const kb = {
+    async search({ mode }) {
+      return {
+        mode: mode === 'semantic' ? 'semantic' : 'keyword',
+        total: 1,
+        results: [
+          {
+            path: '04-社会建设/乡村振兴/2019_福安市…讲话.docx',
+            startLine: 12,
+            endLine: 14,
+            snippet: '福安市入选全国乡村旅游重点村，建成示范点12个',
+            score: 0.9,
+            library: { id: 'lib-1', name: '领导讲话知识库' },
+          },
+        ],
+      }
+    },
+  }
+  const options = normalizeConfig({ root: 'F:\\库', embedding: { provider: 'none' } })
+  const api = createApi({
+    ctx: { get: () => undefined },
+    kb,
+    secrets: createSecretStore(undefined),
+    options,
+    settings: { available: () => false, save: async () => ({}) },
+  })
+
+  const packet = await api.invoke({
+    method: 'POST',
+    pathname: '/api/local-kb/packet',
+    body: { topic: '乡村振兴', outline: '一、产业支撑' },
+  })
+  assert.equal(packet.status, 200)
+  assert.equal(packet.body.ok, true)
+  const cards = Object.values(packet.body.groups).flat()
+  assert.ok(cards.length > 0)
+  assert.ok(cards.every((card) => card.path && card.startLine && card.year && card.region))
+  assert.equal(cards.find((card) => card.region.name === '福安市').year.value, 2019)
+
+  const empty = await api.invoke({ method: 'POST', pathname: '/api/local-kb/packet', body: {} })
+  assert.equal(empty.status, 400)
+  assert.match(empty.body.error, /主题/)
+})
+
 await test('api：保存设置会先回话再交给 configEditor，并把密钥写进凭据库', async () => {
   await withTemp('dsh-kb-save-', async (dir) => {
     const credentials = fakeCredentials()

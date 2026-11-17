@@ -141,6 +141,12 @@ window.__ModuleLoader__.load({
 .lkb-line{color:var(--dsw-alias-label-secondary);user-select:none;display:inline-block;width:3.4em;text-align:right;margin-right:10px}
 .lkb-link{color:var(--dsw-alias-brand-primary);cursor:pointer;background:none;border:0;padding:0;font-size:12px;font-family:inherit;text-decoration:underline}
 .lkb-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-primary);margin:8px 0}.lkb-check input{width:16px;height:16px}.lkb-lib-row{display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin:6px 0}.lkb-lib-add{display:grid;grid-template-columns:minmax(110px,1fr) minmax(160px,1.6fr) auto auto;gap:8px;margin-top:10px}
+.lkb-textarea{width:100%;box-sizing:border-box;margin:0 0 10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.5;resize:vertical}
+.lkb-textarea:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
+.lkb-group-title{margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);border-bottom:1px solid var(--dsw-alias-border-l1);padding-bottom:4px}
+.lkb-meta-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 6px}
+.lkb-meta{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
+.lkb-meta.warn{background:transparent;border:1px solid var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
 .lkb-fieldset{border:0;margin:0;padding:0;min-width:0}
 .lkb-notice.info .lkb-link{color:var(--dsw-alias-brand-primary)}
 .lkb-kicker{font-size:11px;color:var(--dsw-alias-label-secondary)}
@@ -281,6 +287,11 @@ window.__ModuleLoader__.load({
       const [restarting, setRestarting] = useState(false)
       const [scope, setScope] = useState('all')
       const [newLibrary, setNewLibrary] = useState({ name: '', root: '' })
+      const [packetTopic, setPacketTopic] = useState('')
+      const [packetOutline, setPacketOutline] = useState('')
+      const [packet, setPacket] = useState(null)
+      const [packetError, setPacketError] = useState('')
+      const packetSeqRef = useRef(0)
       const pollRef = useRef(0)
       const draftInitRef = useRef(false)
       const searchSeqRef = useRef(0)
@@ -466,6 +477,34 @@ window.__ModuleLoader__.load({
           if (seq === searchSeqRef.current) setBusy('')
         }
       }, [query, config, rerankOn, scope])
+
+      const runPacket = useCallback(async () => {
+        const topic = packetTopic.trim()
+        const outline = packetOutline.trim()
+        if (topic === '' && outline === '') return
+        const seq = (packetSeqRef.current += 1)
+        setBusy('packet')
+        setPacketError('')
+        try {
+          const payload = await request(
+            '/packet',
+            {
+              topic,
+              outline,
+              library: scope === 'all' ? undefined : scope,
+            },
+            { timeoutMs: 180000 },
+          )
+          if (seq !== packetSeqRef.current) return
+          setPacket(payload)
+        } catch (failure) {
+          if (seq !== packetSeqRef.current) return
+          setPacketError(String(failure?.message ?? failure))
+          setPacket(null)
+        } finally {
+          if (seq === packetSeqRef.current) setBusy('')
+        }
+      }, [packetTopic, packetOutline, scope])
 
       const openDoc = useCallback(async (relativePath, startLine = 1, libraryId) => {
         const seq = (readSeqRef.current += 1)
@@ -967,6 +1006,140 @@ window.__ModuleLoader__.load({
             ),
       )
 
+      const PACKET_ORDER = ['quote', 'data', 'policy', 'case', 'other']
+
+      function packetCard(card, index) {
+        const range =
+          card.endLine && card.endLine !== card.startLine ? `L${card.startLine}-${card.endLine}` : `L${card.startLine}`
+        return h(
+          'div',
+          { className: 'lkb-card', key: card.id ?? `${card.path}-${card.startLine}-${index}` },
+          h(
+            'div',
+            { className: 'lkb-card-head' },
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'lkb-card-path',
+                onClick: () => openDoc(card.path, card.startLine, card.library?.id),
+              },
+              `${index + 1}. ${baseName(card.path)}`,
+              h(
+                'span',
+                { style: { fontWeight: 400, color: 'var(--dsw-alias-label-secondary)' } },
+                `  ·  ${card.path} ${range}`,
+              ),
+            ),
+            h('div', { className: 'lkb-card-score' }, `分数 ${Number(card.score).toFixed(3)}`),
+          ),
+          h(
+            'div',
+            { className: 'lkb-meta-row' },
+            h(
+              'span',
+              { className: `lkb-meta${card.year?.value ? '' : ' warn'}` },
+              card.year?.value ? `${card.year.value} 年 · ${card.year.source}` : '年份未知',
+            ),
+            h(
+              'span',
+              { className: `lkb-meta${card.region?.foreign ? ' warn' : ''}` },
+              card.region?.foreign
+                ? `外地 · ${card.region.name || '非本地'}`
+                : `${card.region?.level ?? '未标注'}${card.region?.name ? ` · ${card.region.name}` : ''}`,
+            ),
+            card.library && libraries.length > 1 ? h('span', { className: 'lkb-tag' }, card.library.name) : null,
+            card.labels?.length > 1 ? h('span', { className: 'lkb-kicker' }, card.labels.join(' / ')) : null,
+          ),
+          h('div', { className: 'lkb-snippet' }, card.snippet),
+        )
+      }
+
+      const packetBody = h(
+        'div',
+        null,
+        h(
+          'div',
+          { className: 'lkb-row' },
+          h('input', {
+            className: 'lkb-input wide',
+            placeholder: '主题：一句话，例如「宁德文旅融合与乡村振兴」',
+            value: packetTopic,
+            onChange: (event) => setPacketTopic(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key === 'Enter' && !busy) runPacket()
+            },
+          }),
+          h(
+            'button',
+            {
+              className: 'lkb-btn primary',
+              disabled: Boolean(busy) || (packetTopic.trim() === '' && packetOutline.trim() === ''),
+              onClick: runPacket,
+            },
+            busy === 'packet' ? '生成中…' : '生成素材包',
+          ),
+        ),
+        h('textarea', {
+          className: 'lkb-textarea',
+          placeholder: '提纲（可选）：每条一行，带不带编号都行。例如\n一、文旅融合的现状\n二、存在的短板\n三、下一步举措',
+          value: packetOutline,
+          rows: 4,
+          onChange: (event) => setPacketOutline(event.target.value),
+        }),
+        h(
+          'div',
+          { className: 'lkb-kicker', style: { marginBottom: '12px' } },
+          '会沿语义 / 关键词 / 定向目录三条通道并行检索，去重后按 金句·数据·政策表述·本地事例 归集；每张卡片带年份与地域，重点防「外地经验 / 往年成绩」。',
+        ),
+        packetError ? h(Notice, { kind: 'err' }, packetError) : null,
+        packet === null
+          ? h(
+              'div',
+              { className: 'lkb-empty' },
+              busy === 'packet' ? '正在检索并归集素材…' : '填一句主题（或贴提纲）后点「生成素材包」。',
+            )
+          : h(
+              'div',
+              null,
+              h(
+                'div',
+                { className: 'lkb-kicker', style: { marginBottom: '8px' } },
+                `${packet.stats?.kept ?? 0} 张卡片 · 检索 ${packet.stats?.searched ?? 0} 次 · 候选 ${packet.stats?.candidates ?? 0} 条 · 去重 ${packet.stats?.duplicatesRemoved ?? 0} 条 · ${Math.round((packet.durationMs ?? 0) / 100) / 10} 秒`,
+              ),
+              packet.stats?.foreign > 0 || packet.stats?.unknownYear > 0
+                ? h(
+                    'div',
+                    { className: 'lkb-notice info' },
+                    '核对提示：',
+                    packet.stats?.foreign > 0 ? `${packet.stats.foreign} 条疑似外地材料` : '',
+                    packet.stats?.foreign > 0 && packet.stats?.unknownYear > 0 ? '；' : '',
+                    packet.stats?.unknownYear > 0 ? `${packet.stats.unknownYear} 条年份未知` : '',
+                    '。引用前扫一眼年份与地域。',
+                  )
+                : null,
+              packet.failures?.length
+                ? h(Notice, { kind: 'info' }, `${packet.failures.length} 次检索失败（其余照常）：${packet.failures[0]}`)
+                : null,
+              ...PACKET_ORDER.filter((key) => (packet.groups?.[key]?.length ?? 0) > 0).flatMap((key) => [
+                h(
+                  'div',
+                  { className: 'lkb-group-title', key: `title-${key}` },
+                  `${packet.labels?.[key] ?? key} · ${packet.groups[key].length} 条`,
+                ),
+                ...packet.groups[key].map((card, index) => packetCard(card, index)),
+              ]),
+              (packet.stats?.kept ?? 0) === 0
+                ? h('div', { className: 'lkb-empty' }, '没有找到可用素材：换个更具体的主题，或先在检索页确认索引已建好。')
+                : null,
+              h(
+                'div',
+                { className: 'lkb-kicker', style: { marginTop: '10px' } },
+                '卡片只定位片段。要引用原文，点路径进文档页核对（或对我说「用 kb_read 读这条」）。',
+              ),
+            ),
+      )
+
       const docBody = h(
         'div',
         null,
@@ -1329,7 +1502,7 @@ window.__ModuleLoader__.load({
             ),
           )
 
-      const body = tab === 'search' ? searchBody : tab === 'docs' ? docBody : settingsBody
+      const body = tab === 'search' ? searchBody : tab === 'packet' ? packetBody : tab === 'docs' ? docBody : settingsBody
 
       return h(
         'div',
@@ -1343,11 +1516,11 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'lkb-tabs' },
-            ...['search', 'docs', 'settings'].map((key) =>
+            ...['search', 'packet', 'docs', 'settings'].map((key) =>
               h(
                 'button',
                 { key, className: `lkb-tab${tab === key ? ' on' : ''}`, onClick: () => setTab(key) },
-                key === 'search' ? '检索' : key === 'docs' ? '文档' : '设置',
+                key === 'search' ? '检索' : key === 'packet' ? '素材包' : key === 'docs' ? '文档' : '设置',
               ),
             ),
           ),

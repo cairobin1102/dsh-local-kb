@@ -349,7 +349,7 @@ check('配置归一化：默认值、非法值收敛、indexDir 跟随 root', ()
   assert.equal(normalizeConfig({}).root, '')
 })
 
-check('工具定义：三个工具、schema 合法、错误信息可读', async () => {
+check('工具定义：四个工具、schema 合法、错误信息可读', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dsh-lkb-'))
   try {
     await makeKnowledgeBase(root)
@@ -357,7 +357,7 @@ check('工具定义：三个工具、schema 合法、错误信息可读', async 
     const definitions = createToolDefinitions(kb)
     assert.deepEqual(
       definitions.map((definition) => definition.name),
-      ['kb_search', 'kb_read', 'kb_index'],
+      ['kb_search', 'kb_read', 'kb_index', 'kb_packet'],
     )
     for (const definition of definitions) {
       assert.equal(typeof definition.description, 'string')
@@ -384,10 +384,15 @@ check('工具定义：三个工具、schema 合法、错误信息可读', async 
     assert.match(readText, /第 1-3 行 \/ 共 7 行/)
 
     for (const definition of definitions) {
-      const text = definition.output.render({}, await definition.execute(
-        definition.name === 'kb_read' ? { path: 'guides/rag.md' } : definition.name === 'kb_index' ? { action: 'status' } : { query: '向量' },
-        {},
-      ))
+      const args =
+        definition.name === 'kb_read'
+          ? { path: 'guides/rag.md' }
+          : definition.name === 'kb_index'
+            ? { action: 'status' }
+            : definition.name === 'kb_packet'
+              ? { topic: '向量检索' }
+              : { query: '向量' }
+      const text = definition.output.render({}, await definition.execute(args, {}))
       assert.equal(text[0].type, 'text')
       assert.ok(text[0].text.length > 0)
     }
@@ -396,7 +401,7 @@ check('工具定义：三个工具、schema 合法、错误信息可读', async 
   }
 })
 
-check('apply：注册三个工具、按配置加/不加提示词段落，并能随 effect 卸载', async () => {
+check('apply：注册四个工具、按配置加/不加提示词段落，并能随 effect 卸载', async () => {
   const { apply } = await import('../lib/index.js')
 
   function fakeContext({ withPrompt = true } = {}) {
@@ -440,7 +445,7 @@ check('apply：注册三个工具、按配置加/不加提示词段落，并能�
 
   const configured = fakeContext()
   apply(configured.ctx, { root: 'D:\\notes', embedding: { provider: 'none' } })
-  assert.deepEqual(configured.tools.map((tool) => tool.name), ['kb_search', 'kb_read', 'kb_index'])
+  assert.deepEqual(configured.tools.map((tool) => tool.name), ['kb_search', 'kb_read', 'kb_index', 'kb_packet'])
   assert.equal(configured.sections.length, 1)
   assert.equal(configured.sections[0].name, 'local-kb')
   assert.equal(configured.sections[0].order, 260)
@@ -451,7 +456,7 @@ check('apply：注册三个工具、按配置加/不加提示词段落，并能�
 
   const bare = fakeContext()
   apply(bare.ctx, {})
-  assert.equal(bare.tools.length, 3)
+  assert.equal(bare.tools.length, 4)
   assert.equal(bare.sections.length, 0)
 
   const noPrompt = fakeContext()
