@@ -143,14 +143,25 @@ window.__ModuleLoader__.load({
 .lkb-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dsw-alias-label-primary);margin:8px 0}.lkb-check input{width:16px;height:16px}.lkb-lib-row{display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin:6px 0}.lkb-lib-add{display:grid;grid-template-columns:minmax(110px,1fr) minmax(160px,1.6fr) auto auto;gap:8px;margin-top:10px}
 .lkb-textarea{width:100%;box-sizing:border-box;margin:0 0 10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.5;resize:vertical}
 .lkb-textarea:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
-.lkb-group-title{margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);border-bottom:1px solid var(--dsw-alias-border-l1);padding-bottom:4px}
-.lkb-cat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin:4px 0 12px}
-.lkb-cat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;text-align:left}
-.lkb-cat:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2)}
-.lkb-cat.on{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}
+.lkb-group-title{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:18px 0 8px;font-size:12px;font-weight:600;letter-spacing:.03em;color:var(--dsw-alias-label-primary);border-bottom:1px solid var(--dsw-alias-border-l1);padding-bottom:5px}
+.lkb-group-count{font-weight:400;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
+.lkb-cat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:6px 0 14px}
+.lkb-cat{position:relative;display:flex;flex-direction:column;gap:3px;padding:12px 14px 14px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;text-align:left;transition:border-color .15s ease,background .15s ease,transform .15s ease}
+.lkb-cat:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);transform:translateY(-1px)}
+.lkb-cat.on{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary)}
 .lkb-cat:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
-.lkb-cat-count{font-size:20px;font-weight:600;line-height:1.1}
-.lkb-cat-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.lkb-cat-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.lkb-cat-icon{color:var(--dsw-alias-label-secondary);flex:none}
+.lkb-cat.on .lkb-cat-icon{color:var(--dsw-alias-brand-primary)}
+.lkb-cat-count{font-size:22px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.lkb-cat-label{font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lkb-cat.on .lkb-cat-label{color:var(--dsw-alias-label-primary)}
+.lkb-cat-bar{display:block;height:3px;margin-top:7px;border-radius:999px;background:var(--dsw-alias-border-l1);overflow:hidden}
+.lkb-cat-bar span{display:block;height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary);opacity:.65}
+.lkb-cat.on .lkb-cat-bar span{opacity:1}
+.lkb-packet-head{display:flex;flex-direction:column;gap:2px;padding:12px 14px;margin:0 0 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-1)}
+.lkb-packet-title{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.lkb-packet-time{font-size:11px;font-weight:400;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
 .lkb-meta-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 6px}
 .lkb-meta{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
 .lkb-meta.warn{background:transparent;border:1px solid var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
@@ -1017,6 +1028,18 @@ window.__ModuleLoader__.load({
 
       const PACKET_ORDER = ['quote', 'data', 'policy', 'case', 'other']
 
+      // 16x16 的线性图标，颜色跟 currentColor 走，选中态由父级改色。
+      const PACKET_ICONS = {
+        all: ['M3 3h4.2v4.2H3z', 'M8.8 3H13v4.2H8.8z', 'M3 8.8h4.2V13H3z', 'M8.8 8.8H13V13H8.8z'],
+        quote: [
+          'M4.9 7.1c0-1.9 1.2-3.3 3.1-3.7l.4 1.2c-1.1.4-1.6 1.1-1.7 2h1.7V11H4.9z',
+          'M10.5 7.1c0-1.9 1.2-3.3 3.1-3.7l.4 1.2c-1.1.4-1.6 1.1-1.7 2h1.7V11h-3.5z',
+        ],
+        data: ['M3.4 12.6V8.2', 'M8 12.6V4.4', 'M12.6 12.6V6.4'],
+        policy: ['M4.4 2.6h4.9L11.6 5v8.4H4.4z', 'M9.3 2.6V5h2.3', 'M6.4 8h3.2', 'M6.4 10.4h3.2'],
+        case: ['M8 13.2s3.6-3.3 3.6-6A3.6 3.6 0 0 0 4.4 7.2c0 2.7 3.6 6 3.6 6z', 'M8 8.4a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z'],
+      }
+
       function packetCard(card, index) {
         const range =
           card.endLine && card.endLine !== card.startLine ? `L${card.startLine}-${card.endLine}` : `L${card.startLine}`
@@ -1113,8 +1136,20 @@ window.__ModuleLoader__.load({
               null,
               h(
                 'div',
-                { className: 'lkb-kicker', style: { marginBottom: '8px' } },
-                `${packet.stats?.kept ?? 0} 张卡片 · 检索 ${packet.stats?.searched ?? 0} 次 · 候选 ${packet.stats?.candidates ?? 0} 条 · 去重 ${packet.stats?.duplicatesRemoved ?? 0} 条 · ${Math.round((packet.durationMs ?? 0) / 100) / 10} 秒`,
+                { className: 'lkb-packet-head' },
+                h(
+                  'div',
+                  { className: 'lkb-packet-title' },
+                  `素材包 · ${packet.stats?.kept ?? 0} 张卡片`,
+                  packet.stats?.searched
+                    ? h('span', { className: 'lkb-packet-time' }, `${Math.round((packet.durationMs ?? 0) / 100) / 10} 秒`)
+                    : null,
+                ),
+                h(
+                  'div',
+                  { className: 'lkb-kicker' },
+                  `检索 ${packet.stats?.searched ?? 0} 次 · 候选 ${packet.stats?.candidates ?? 0} 条 · 去重 ${packet.stats?.duplicatesRemoved ?? 0} 条`,
+                ),
               ),
               packet.stats?.foreign > 0 || packet.stats?.unknownYear > 0
                 ? h(
@@ -1149,20 +1184,47 @@ window.__ModuleLoader__.load({
                   h(
                     'div',
                     { className: 'lkb-cat-row', key: 'cat-row' },
-                    ...chips.map((chip) =>
-                      h(
+                    ...chips.map((chip) => {
+                      const active = packetCategory === chip.key
+                      const share = total > 0 ? Math.round((chip.count / total) * 100) : 0
+                      return h(
                         'button',
                         {
                           type: 'button',
                           key: `cat-${chip.key}`,
-                          className: `lkb-cat${packetCategory === chip.key ? ' on' : ''}`,
-                          'aria-pressed': packetCategory === chip.key ? 'true' : 'false',
+                          className: `lkb-cat${active ? ' on' : ''}`,
+                          'aria-pressed': active ? 'true' : 'false',
                           onClick: () => setPacketCategory(chip.key),
                         },
-                        h('span', { className: 'lkb-cat-count' }, String(chip.count)),
+                        h(
+                          'span',
+                          { className: 'lkb-cat-top' },
+                          h(
+                            'svg',
+                            {
+                              className: 'lkb-cat-icon',
+                              width: 16,
+                              height: 16,
+                              viewBox: '0 0 16 16',
+                              fill: 'none',
+                              stroke: 'currentColor',
+                              strokeWidth: 1.3,
+                              strokeLinecap: 'round',
+                              strokeLinejoin: 'round',
+                              'aria-hidden': 'true',
+                            },
+                            ...(PACKET_ICONS[chip.key] ?? PACKET_ICONS.all).map((d, i) => h('path', { d, key: i })),
+                          ),
+                          h('span', { className: 'lkb-cat-count' }, String(chip.count)),
+                        ),
                         h('span', { className: 'lkb-cat-label' }, chip.label),
-                      ),
-                    ),
+                        h(
+                          'span',
+                          { className: 'lkb-cat-bar' },
+                          h('span', { style: { width: `${share}%` } }),
+                        ),
+                      )
+                    }),
                   ),
                   packetCategory !== 'all' && shown.length === 0
                     ? h('div', { className: 'lkb-empty', key: 'cat-empty' }, '这一类没有命中素材，点「全部素材」看其它分类。')
@@ -1171,7 +1233,8 @@ window.__ModuleLoader__.load({
                     h(
                       'div',
                       { className: 'lkb-group-title', key: `title-${key}` },
-                      `${packet.labels?.[key] ?? key} · ${counts[key]} 条`,
+                      h('span', null, packet.labels?.[key] ?? key),
+                      h('span', { className: 'lkb-group-count' }, `${counts[key]} 条`),
                     ),
                     ...packet.groups[key].map((card, index) => packetCard(card, index)),
                   ]),
