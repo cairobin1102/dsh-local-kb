@@ -1,4 +1,4 @@
-﻿# 备份与恢复
+# 备份与恢复
 
 这套东西分三块，价值与体积差很多，备份方式也不同：
 
@@ -44,21 +44,22 @@ $git = 'D:\DSH\tools\mingit\cmd\git.exe'   # 便携版 git；装了 Git for Wind
 
 ## 推到 GitHub（本机只能走 SSH）
 
-这台机器上 `github.com:443` 不通（TCP 连不上），但 `github.com:22` 通，所以用 **SSH** 而不是 HTTPS。
+- 仓库：`https://github.com/cairobin1102/dsh-local-kb`（私有）
+- 本机 `github.com:443` 不通、`22` 通 → 一律走 SSH，不要用 HTTPS 远端。
+- 便携版 git：`D:\DSH\tools\mingit\cmd\git.exe`（没有系统 git 时用它）
+- 密钥与配置（已装好）：
+  - 私钥 `%USERPROFILE%\.ssh\id_ed25519_github`（无口令，公钥已加到 GitHub）
+  - 配置 `%USERPROFILE%\.ssh\config`，`Host github.com` 段落指定 `IdentityFile` / `IdentitiesOnly` / `StrictHostKeyChecking accept-new` / `BatchMode yes`
+- **不要用 `GIT_SSH_COMMAND` 带参数**：Git for Windows 会绕 msys 的 `sh` 解析它，本机沙箱下报 `couldn't create signal pipe, Win32 error 5`。用 `GIT_SSH` 只给 `ssh.exe` 路径（脚本里已经这么设了）。
 
-- 便携版 git：`D:\DSH\tools\mingit\cmd\git.exe`
-- 专用密钥：`D:\DSH\.ssh\id_ed25519_github`（公钥 `id_ed25519_github.pub`）
-- 已知主机：`D:\DSH\.ssh\known_hosts`
-
-一次性准备：
-
-1. 把公钥加到 GitHub：Settings → SSH and GPG keys → New SSH key（公钥内容见仓库提交记录 / 运行 `ssh-keygen -y -f D:\DSH\.ssh\id_ed25519_github` 打印）；
-2. 在 GitHub 建一个**空**的私有仓库（不要勾 README / .gitignore / license），名字例如 `dsh-local-kb`。
-
-推送：
+日常推送：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\push-github.ps1 -Repo 你的用户名/dsh-local-kb
+powershell -ExecutionPolicy Bypass -File scripts\push-github.ps1
+# 指定别的仓库 / 只推不提交：
+#   -Repo owner/name   -NoCommit
 ```
 
-脚本会自动设 remote、提交未提交的改动、用 SSH 推 `main`。以后改完代码再跑一次即可（也可以只推不做提交：已经提交过的会直接 push）。
+脚本做的事：设 remote → `git add -A` + 提交（有改动时）→ `GIT_SSH=ssh.exe` → `git push -u origin main`。
+
+换机器恢复时，先按上面重建 `%USERPROFILE%\.ssh\config` 与私钥，再 `git clone git@github.com:cairobin1102/dsh-local-kb.git`。
