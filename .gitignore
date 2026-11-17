@@ -1,0 +1,14 @@
+﻿# 依赖与构建产物
+node_modules/
+.ocr-work/
+
+# OCR 引擎与原始压缩包（46MB + 94MB，按需下载，见 tools/README.md）
+tools/*
+!tools/README.md
+
+# 备份产物
+*.zip
+backup/
+
+# 索引（可重建；需要时用 scripts/backup.ps1 -IncludeIndex 单独备份）
+.dsh-kb/

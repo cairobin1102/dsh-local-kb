@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Local knowledge base",
+    "description": "Turns any local folder of notes and documents into a searchable knowledge base: files are chunked, embedded, and indexed, and the agent gets kb_search, kb_read, and kb_index tools that cite exact files and line numbers. A sidebar panel indexes, searches, reads sources, and configures the embedding and rerank models, keeping API keys in the DSH credential store. Falls back to local keyword search when the embedding service is unavailable.",
+    "detail": "docs/DETAIL.md"
+  }
+}

@@ -1,0 +1,26 @@
+# dsh-local-kb 组合包补丁：插入本地知识库插件的行。
+# 配置缺失时插件照常加载，工具调用会返回「如何配置」的可读错误。
+#
+# 最常见的配置（在用户 profile 的 cordis.patch.yml 里覆盖本行的整个 config）：
+#   - id: local-kb
+#     name: 'dsh-local-kb'
+#     config:
+#       root: 'D:\notes'                 # 知识库文件夹（绝对路径），必填
+#       embedding:
+#         provider: ollama               # ollama | openai | none
+#         baseUrl: http://127.0.0.1:11434
+#         model: bge-m3
+#       # provider: openai 时
+#       #   baseUrl: https://api.openai.com/v1
+#       #   model: text-embedding-3-small
+#       #   apiKeyEnv: LOCAL_KB_API_KEY  # 环境变量名，避免把密钥写进配置
+#
+# 其余可选项见 README.md（include/extensions、exclude、chunkSize、
+# search.topK、search.minScore、autoBuild、promptSection 等）。
+- insert:
+    - id: local-kb
+      name: 'dsh-local-kb'
+      config:
+        root: ''
+        embedding:
+          provider: none

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Local knowledge base">
+  <defs>
+    <linearGradient id="lkb-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f55c7"/>
+      <stop offset="1" stop-color="#5b8cf5"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#lkb-bg)"/>
+  <g transform="rotate(-8 32 32)" opacity="0.5">
+    <rect x="15" y="10" width="25" height="33" rx="4" fill="#ffffff"/>
+  </g>
+  <rect x="19" y="14" width="25" height="34" rx="4" fill="#ffffff"/>
+  <g stroke="#2f55c7" stroke-width="2" stroke-linecap="round" opacity="0.7">
+    <path d="M24 23h15"/>
+    <path d="M24 29h15"/>
+    <path d="M24 35h9"/>
+  </g>
+  <circle cx="44" cy="45" r="13" fill="url(#lkb-bg)"/>
+  <circle cx="43" cy="44" r="8.5" fill="none" stroke="#ffffff" stroke-width="3.2"/>
+  <path d="M49.2 50.2 55 56" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round"/>
+</svg>
