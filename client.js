@@ -144,6 +144,13 @@ window.__ModuleLoader__.load({
 .lkb-textarea{width:100%;box-sizing:border-box;margin:0 0 10px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.5;resize:vertical}
 .lkb-textarea:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}
 .lkb-group-title{margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);border-bottom:1px solid var(--dsw-alias-border-l1);padding-bottom:4px}
+.lkb-cat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin:4px 0 12px}
+.lkb-cat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;text-align:left}
+.lkb-cat:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2)}
+.lkb-cat.on{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-bg-layer-2)}
+.lkb-cat:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+.lkb-cat-count{font-size:20px;font-weight:600;line-height:1.1}
+.lkb-cat-label{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .lkb-meta-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 6px}
 .lkb-meta{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
 .lkb-meta.warn{background:transparent;border:1px solid var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}
@@ -291,6 +298,7 @@ window.__ModuleLoader__.load({
       const [packetOutline, setPacketOutline] = useState('')
       const [packet, setPacket] = useState(null)
       const [packetError, setPacketError] = useState('')
+      const [packetCategory, setPacketCategory] = useState('all')
       const packetSeqRef = useRef(0)
       const pollRef = useRef(0)
       const draftInitRef = useRef(false)
@@ -497,6 +505,7 @@ window.__ModuleLoader__.load({
           )
           if (seq !== packetSeqRef.current) return
           setPacket(payload)
+          setPacketCategory('all')
         } catch (failure) {
           if (seq !== packetSeqRef.current) return
           setPacketError(String(failure?.message ?? failure))
@@ -1121,14 +1130,53 @@ window.__ModuleLoader__.load({
               packet.failures?.length
                 ? h(Notice, { kind: 'info' }, `${packet.failures.length} 次检索失败（其余照常）：${packet.failures[0]}`)
                 : null,
-              ...PACKET_ORDER.filter((key) => (packet.groups?.[key]?.length ?? 0) > 0).flatMap((key) => [
-                h(
-                  'div',
-                  { className: 'lkb-group-title', key: `title-${key}` },
-                  `${packet.labels?.[key] ?? key} · ${packet.groups[key].length} 条`,
-                ),
-                ...packet.groups[key].map((card, index) => packetCard(card, index)),
-              ]),
+              ...(() => {
+                const counts = {}
+                let total = 0
+                for (const key of PACKET_ORDER) {
+                  const count = packet.groups?.[key]?.length ?? 0
+                  counts[key] = count
+                  total += count
+                }
+                const visible = PACKET_ORDER.filter((key) => counts[key] > 0)
+                if (total === 0) return []
+                const chips = [
+                  { key: 'all', label: '全部素材', count: total },
+                  ...visible.map((key) => ({ key, label: packet.labels?.[key] ?? key, count: counts[key] })),
+                ]
+                const shown = packetCategory === 'all' ? visible : visible.filter((key) => key === packetCategory)
+                return [
+                  h(
+                    'div',
+                    { className: 'lkb-cat-row', key: 'cat-row' },
+                    ...chips.map((chip) =>
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          key: `cat-${chip.key}`,
+                          className: `lkb-cat${packetCategory === chip.key ? ' on' : ''}`,
+                          'aria-pressed': packetCategory === chip.key ? 'true' : 'false',
+                          onClick: () => setPacketCategory(chip.key),
+                        },
+                        h('span', { className: 'lkb-cat-count' }, String(chip.count)),
+                        h('span', { className: 'lkb-cat-label' }, chip.label),
+                      ),
+                    ),
+                  ),
+                  packetCategory !== 'all' && shown.length === 0
+                    ? h('div', { className: 'lkb-empty', key: 'cat-empty' }, '这一类没有命中素材，点「全部素材」看其它分类。')
+                    : null,
+                  ...shown.flatMap((key) => [
+                    h(
+                      'div',
+                      { className: 'lkb-group-title', key: `title-${key}` },
+                      `${packet.labels?.[key] ?? key} · ${counts[key]} 条`,
+                    ),
+                    ...packet.groups[key].map((card, index) => packetCard(card, index)),
+                  ]),
+                ]
+              })(),
               (packet.stats?.kept ?? 0) === 0
                 ? h('div', { className: 'lkb-empty' }, '没有找到可用素材：换个更具体的主题，或先在检索页确认索引已建好。')
                 : null,
