@@ -186,6 +186,35 @@ await test('secrets：宿主没有凭据服务时保存给出明确指引', asyn
   assert.equal(info.configured, true)
 })
 
+await test('secrets：凭据服务晚装配也能用（getter 惰性解析，不抓 apply 时快照）', async () => {
+  const records = new Map()
+  const credentials = {
+    async readRecord(key) {
+      return records.get(key)
+    },
+    async modifyRecord(key, mutate) {
+      const next = await mutate(records.get(key))
+      records.set(key, next)
+      return next
+    },
+    async deleteRecord(key) {
+      records.delete(key)
+    },
+  }
+  let ready
+  const store = createSecretStore(() => ready)
+  assert.equal(store.available, false)
+  await assert.rejects(() => store.save('embedding', 'sk-late'), /凭据服务/)
+  // 服务在插件 apply 之后才装配：同一份 store 必须自己恢复。
+  ready = credentials
+  assert.equal(store.available, true)
+  await store.save('embedding', 'sk-late')
+  assert.equal((await store.read('embedding', { secretName: 'local-kb/embedding' })), 'sk-late')
+  const info = await store.describe('embedding', {})
+  assert.equal(info.writable, true)
+  assert.equal(info.source, 'credential')
+})
+
 await test('mergeConfig：改 root 会同时换掉默认索引目录', () => {
   const options = normalizeConfig({ root: path.join('C:', 'notes'), embedding: { provider: 'none' } })
   assert.ok(options.indexDir.endsWith('.dsh-kb'))

@@ -1308,6 +1308,15 @@ window.__ModuleLoader__.load({
             'fieldset',
             { className: 'lkb-fieldset', disabled: Boolean(busy === 'save' || restarting) },
             notice ? h(Notice, { kind: notice.kind }, notice.text) : null,
+            state && state.capabilities && state.capabilities.secrets === false
+              ? h(
+                  Notice,
+                  { kind: 'info' },
+                  '当前宿主没有可用的凭据服务，密钥框保存会失败。' +
+                    '可以改用下面的「密钥来源环境变量」（例如 SILICONFLOW_API_KEY），' +
+                    '或先在 profile 里启用 credentials 插件再重试。',
+                )
+              : null,
             h(
               'div',
               { className: 'lkb-section' },
